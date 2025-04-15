@@ -1,13 +1,15 @@
 package com.maciejwalkowiak.jparitionerplayground;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.stream.Collectors;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.stream.IntStream;
 
 public class Partition {
     private final String tableName;
+    private int retention = 7;
+    private int buffer = 0;
 
     private Partition(String tableName) {
         if (tableName == null) {
@@ -20,84 +22,49 @@ public class Partition {
         return new Partition(tableName);
     }
 
-    public RangePartition byRange(String columnName) {
-        return new RangePartition(this.tableName, columnName);
+    public Partition retention(int retention) {
+        this.retention = retention;
+        return this;
     }
 
-    public static class RangePartition {
-        private final String tableName;
-        private final String columnName;
-
-        private RangePartition(String tableName, String columnName) {
-            this.tableName = tableName;
-            this.columnName = columnName;
-        }
-
-        public RangeTypedPartition daily() {
-            return new RangeTypedPartition(this.tableName, this.columnName, RangeType.DAILY);
-        }
-
-        public RangeTypedPartition monthly() {
-            return new RangeTypedPartition(this.tableName, this.columnName, RangeType.MONTHLY);
-        }
+    public Partition buffer(int buffer) {
+        this.buffer = buffer;
+        return this;
     }
 
-    public static class RangeTypedPartition {
-        private final String tableName;
-        private final String columnName;
-        private final RangeType rangeType;
-        private int retention = 7;
-        private int buffer = 0;
+    public void refresh(PartitionRepository partitionRepository) {
+        var partitions = partitionRepository.findPartitions(this.tableName);
+        validateNamingPattern(partitions);
 
-        private RangeTypedPartition(String tableName, String columnName, RangeType rangeType) {
-            this.tableName = tableName;
-            this.columnName = columnName;
-            this.rangeType = rangeType;
-        }
+        var currentPartitionDates = this.currentPartitionDates();
 
-        public RangeTypedPartition retention(int retention) {
-            this.retention = retention;
-            return this;
-        }
+        partitionRepository.detachPartitions(this.tableName, partitions
+                .stream()
+                .filter(it -> !currentPartitionDates.contains(it.date()))
+                .toList());
 
-        public RangeTypedPartition buffer(int buffer) {
-            this.buffer = buffer;
-            return this;
-        }
-
-        public String toSql() {
-            return IntStream.range(0, buffer)
-                    .mapToObj(i -> "CREATE TABLE " + this.tableName + "_" + partitionName(i) + " PARTITION OF " + tableName + " FOR VALUES FROM ('" + rangeStart(i).format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + rangeEnd(i).format(DateTimeFormatter.ISO_DATE_TIME) + "');")
-                    .collect(Collectors.joining("\n"));
-        }
-
-        private LocalDateTime rangeEnd(int i) {
-            LocalDate now = LocalDate.now();
-            return switch (this.rangeType) {
-                case DAILY -> now.plusDays(i + 1).atStartOfDay().minusSeconds(1);
-                case MONTHLY -> rangeStart(i).plusMonths(1).minusSeconds(1);
-            };
-        }
-
-        private LocalDateTime rangeStart(int i) {
-            LocalDate now = LocalDate.now();
-            return switch (this.rangeType) {
-                case DAILY -> now.plusDays(i).atStartOfDay();
-                case MONTHLY -> now.plusMonths(i).atStartOfDay().withDayOfMonth(1);
-            };
-        }
-
-        private String partitionName(int i) {
-            LocalDate now = LocalDate.now();
-            return switch (this.rangeType) {
-                case DAILY -> now.plusDays(i).format(DateTimeFormatter.ISO_DATE);
-                case MONTHLY -> now.plusMonths(i).format(DateTimeFormatter.ofPattern("yyyy-MM"));
-            };
-        }
+        partitionRepository.createPartitions(this.tableName, currentPartitionDates.stream()
+                .filter(it -> partitions.stream().noneMatch(partition -> partition.date().equals(it)))
+                .sorted()
+                .toList());
     }
 
-    private enum RangeType {
-        DAILY,
-        MONTHLY
+    private List<LocalDate> currentPartitionDates() {
+        return IntStream.range(-retention, buffer)
+                .mapToObj(i -> LocalDate.now().plusDays(i))
+                .toList();
+    }
+
+    private void validateNamingPattern(List<PartitionInfo> partitions) {
+        for (PartitionInfo partition : partitions) {
+            if (!partition.partitionName().startsWith(this.tableName + "_")) {
+                throw new IllegalArgumentException("Partition name '" + partition.partitionName() + "' does not start with " + this.tableName + "_");
+            }
+            try {
+                LocalDate.parse(partition.partitionName().substring(this.tableName.length() + 1), DateTimeFormatter.ofPattern("yyyyMMdd"));
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("Partition name '" + partition.partitionName() + "' contains invalid date format");
+            }
+        }
     }
 }
