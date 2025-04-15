@@ -1,6 +1,5 @@
 package com.maciejwalkowiak.jparitionerplayground;
 
-import org.springframework.boot.autoconfigure.jdbc.JdbcClientAutoConfiguration;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -19,7 +18,7 @@ public class JdbcPartitionRepository implements PartitionRepository {
     }
 
     @Override
-    public List<PartitionInfo> findPartitions(String tableName) {
+    public List<PartitionRow> findPartitions(String tableName) {
         String sql = """
                 SELECT
                     child.relname AS partition_name
@@ -39,28 +38,30 @@ public class JdbcPartitionRepository implements PartitionRepository {
 
         return jdbcClient.sql(sql)
                 .param("tableName", tableName)
-                .query(PartitionInfo.class)
+                .query(PartitionRow.class)
                 .list()
                 .stream()
-                .sorted(Comparator.comparing(PartitionInfo::partitionName))
+                .sorted(Comparator.comparing(PartitionRow::partitionName))
                 .toList();
     }
 
     @Override
-    public void detachPartitions(String tableName, List<PartitionInfo> partitions) {
+    public void detachPartitions(String tableName, List<PartitionRow> partitions) {
         String sql = partitions.stream()
-                .map(PartitionInfo::partitionName)
-                .map(partitionName -> "ALTER TABLE " + tableName + " DETACH PARTITION " + partitionName + " CONCURRENTLY;")
-                .collect(Collectors.joining());
+                .map(PartitionRow::partitionName)
+                .map(partitionName -> "ALTER TABLE " + tableName + " DETACH PARTITION " + partitionName + ";")
+                .collect(Collectors.joining("\n"));
+        System.out.println(sql);
         jdbcClient.sql(sql).update();
 
     }
 
     @Override
-    public void createPartitions(String tableName, List<LocalDate> dates) {
-        String sql = dates.stream()
-                .map(date -> "CREATE TABLE " + tableName + "_" + date.format(DateTimeFormatter.ofPattern("yyyyMMdd")) + " PARTITION OF " + tableName + " FOR VALUES FROM ('" + date.atStartOfDay().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + date.atStartOfDay().plusDays(1).minusSeconds(1).format(DateTimeFormatter.ISO_DATE_TIME) + "');")
-                .collect(Collectors.joining());
+    public void createPartitions(String tableName, List<PartitionInfo> partitions) {
+        String sql = partitions.stream()
+                .map(it -> "CREATE TABLE " + tableName + "_" + it.partitionName() + " PARTITION OF " + tableName + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "');")
+                .collect(Collectors.joining("\n"));
+        System.out.println(sql);
         jdbcClient.sql(sql).update();
     }
 }

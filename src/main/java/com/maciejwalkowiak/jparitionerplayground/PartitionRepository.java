@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 public interface PartitionRepository {
-    List<PartitionInfo> findPartitions(String tableName);
-    void detachPartitions(String tableName, List<PartitionInfo> partitions);
-    void createPartitions(String tableName, List<LocalDate> dates);
+    List<PartitionRow> findPartitions(String tableName);
+    void detachPartitions(String tableName, List<PartitionRow> partitions);
+    void createPartitions(String tableName, List<PartitionInfo> dates);
 }
