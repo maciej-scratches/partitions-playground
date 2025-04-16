@@ -3,7 +3,8 @@ package com.maciejwalkowiak.jparitionerplayground;
 import java.util.List;
 
 public interface PartitionRepository {
-    List<PartitionName> findPartitions(String tableName);
-    void detachPartitions(String tableName, List<DropPartition> partitions);
-    void createPartitions(String tableName, List<AddPartition> dates);
+    List<Partition> findPartitions(String tableName);
+    void detachPartitions(List<Partition> partitions);
+    void dropPartitions(List<Partition> partitions);
+    void createPartitions(List<Partition> partitions);
 }

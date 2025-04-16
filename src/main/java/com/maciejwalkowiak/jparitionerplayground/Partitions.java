@@ -3,11 +3,8 @@ package com.maciejwalkowiak.jparitionerplayground;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.Comparator;
 import java.util.List;
+import java.util.stream.IntStream;
 
 @Component
 public class Partitions {
@@ -17,50 +14,47 @@ public class Partitions {
         this.partitionRepository = partitionRepository;
     }
 
-    private PartitionChange diff(LocalDate date, PartitionConfig config) {
-        var partitions = partitionRepository.findPartitions(config.tableName());
-        validateNamingPattern(config, partitions);
-
-        var currentPartitionDates = config.expectedPartitionDates(date);
-
-        var partitionsToDrop = partitions
-                .stream()
-                .filter(it -> currentPartitionDates.stream().noneMatch(p -> p.date().equals(it.date())))
-                .map(it -> new DropPartition(it.value()))
-                .toList();
-
-        var partitionsToAdd = currentPartitionDates.stream()
-                .filter(it -> partitions.stream().noneMatch(partition -> partition.date().equals(it.date())))
-                .map(it -> new AddPartition(it.partitionName(), it.start(), it.end()))
-                .sorted(Comparator.comparing(AddPartition::partitionNameSuffix))
-                .toList();
-        return new PartitionChange(partitionsToDrop, partitionsToAdd);
-    }
-
     public void refresh(PartitionConfig config) {
         refresh(LocalDate.now(), config);
     }
+
     public void refresh(LocalDate date, PartitionConfig config) {
-        var diff = diff(date, config);
-        partitionRepository.detachPartitions(config.tableName(), diff.dropPartitions());
-        partitionRepository.createPartitions(config.tableName(), diff.addPartitions());
+        PartitionChangeset changeset = diff(date, config);
+        if (config.retentionPolicy() == RetentionPolicy.DETACH) {
+            partitionRepository.detachPartitions(changeset.remove());
+        } else if (config.retentionPolicy() == RetentionPolicy.DROP) {
+            partitionRepository.dropPartitions(changeset.remove());
+        };
+        partitionRepository.createPartitions(changeset.add());
     }
 
-    private void validateNamingPattern(PartitionConfig config, List<PartitionName> partitions) {
-        for (PartitionName partition : partitions) {
-            if (!partition.value().startsWith(config.tableName() + "_")) {
-                throw new IllegalStateException("Partition name '" + partition.value() + "' does not start with " + config.tableName() + "_");
-            }
-            try {
-                switch (config.rangeType()) {
-                    case DAILY -> LocalDate.parse(partition.value().substring(config.tableName().length() + 1), DateTimeFormatter.ofPattern("yyyyMMdd"));
-                    case MONTHLY -> LocalDate.parse(partition.value().substring(config.tableName().length() + 1) + "01", DateTimeFormatter.ofPattern("yyyyMMdd"));
-                };
-            } catch (DateTimeParseException e) {
-                throw new IllegalStateException("Partition name '" + partition.value() + "' contains invalid date format", e);
-            }
-        }
+    private PartitionChangeset diff(LocalDate date, PartitionConfig config) {
+        List<Partition> existingPartitions = partitionRepository.findPartitions(config.tableName());
+        existingPartitions.forEach(it -> it.validate(config));
+
+        List<Partition> expectedPartitions = this.expectedPartitions(config, date);
+
+        List<Partition> partitionsToDrop = existingPartitions
+                .stream()
+                .filter(it -> !expectedPartitions.contains(it))
+                .toList();
+
+        List<Partition> partitionsToAdd = expectedPartitions.stream()
+                .filter(it -> !existingPartitions.contains(it))
+                .toList();
+        return new PartitionChangeset(partitionsToDrop, partitionsToAdd);
     }
 
-    public record PartitionInfo(String partitionName, LocalDate date, LocalDateTime start, LocalDateTime end) {}
+    private List<Partition> expectedPartitions(PartitionConfig config, LocalDate date) {
+        return IntStream.range(-config.retention(), config.buffer())
+                .mapToObj(i -> Partition.of(config.tableName(), config.rangeType(), partitionDate(config, date, i)))
+                .toList();
+    }
+
+    private LocalDate partitionDate(PartitionConfig config, LocalDate date, int i) {
+        return switch (config.rangeType()) {
+            case DAILY -> date.plusDays(i);
+            case MONTHLY -> date.plusMonths(i);
+        };
+    }
 }

@@ -1,4 +1,6 @@
 package com.maciejwalkowiak.jparitionerplayground;
 
-public record DropPartition(String partitionName) {
+public enum RetentionPolicy {
+    DETACH,
+    DROP
 }

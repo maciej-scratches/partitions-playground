@@ -1,5 +1,8 @@
 package com.maciejwalkowiak.jparitionerplayground;
 
+import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,6 +12,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -22,8 +27,8 @@ class JparitionerPlaygroundApplicationTests {
     @Autowired
     private Partitions partitions;
 
-    @Test
-    void contextLoads() {
+    @BeforeEach
+    void setUp() {
         String sql = """
                 CREATE TABLE events (
                     id SERIAL,
@@ -34,45 +39,100 @@ class JparitionerPlaygroundApplicationTests {
                 """;
 
         jdbcClient.sql(sql).update();
+    }
 
-        createPartition(LocalDate.now());
-        createPartition(LocalDate.now().minusDays(1));
-        createPartition(LocalDate.now().minusDays(10));
+    @AfterEach
+    void tearDown() {
+        jdbcClient.sql("drop table events cascade").update();
+    }
 
-        System.out.println(jdbcPartitionRepository.findPartitions("events"));
+    @Test
+    void daily() {
+        createPartition(pointInTime());
+        createPartition(pointInTime().minusDays(1));
+        createPartition(pointInTime().minusDays(10));
 
-        partitions.refresh(PartitionConfig.forTable("events")
-                .retention(7)
-                .buffer(7));
+        partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
+                .retention(3)
+                .buffer(4));
 
-        System.out.println(jdbcPartitionRepository.findPartitions("events"));
+        var result = jdbcPartitionRepository.findPartitions("events");
+
+        assertThat(result).containsExactlyInAnyOrder(
+                Partition.of("events_20240210"),
+                Partition.of("events_20240211"),
+                Partition.of("events_20240212"),
+                Partition.of("events_20240213"),
+                Partition.of("events_20240209"),
+                Partition.of("events_20240208"),
+                Partition.of("events_20240207")
+        );
+
+        jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")
+                .param("timestamp", LocalDateTime.of(2024, 2, 8, 12, 12, 12))
+                .update();
+
+        jdbcClient.sql("insert into events(name, created_at) values ('yyy', :timestamp)")
+                .param("timestamp", LocalDateTime.of(2024, 2, 11, 12, 12, 12))
+                .update();
+
+        assertThat(jdbcClient.sql("select count(*) from events")
+                .query(Long.class)
+                .single()).isEqualTo(2);
+
+        assertThat(jdbcClient.sql("select name from events_20240208")
+                .query(String.class)
+                .single()).isEqualTo("xxx");
+
+        assertThat(jdbcClient.sql("select name from events_20240211")
+                .query(String.class)
+                .single()).isEqualTo("yyy");
     }
 
     @Test
     void monthly() {
-        String sql = """
-                CREATE TABLE events (
-                    id SERIAL,
-                    name TEXT NOT NULL,
-                    created_at TIMESTAMP NOT NULL,
-                    primary key (id, created_at)
-                ) PARTITION BY RANGE (created_at);
-                """;
+        createMonthlyPartition(pointInTime());
+        createMonthlyPartition(pointInTime().minusMonths(1));
+        createMonthlyPartition(pointInTime().minusMonths(10));
 
-        jdbcClient.sql(sql).update();
-
-        createMonthlyPartition(LocalDate.now());
-        createMonthlyPartition(LocalDate.now().minusMonths(1));
-        createMonthlyPartition(LocalDate.now().minusMonths(10));
-
-        System.out.println(jdbcPartitionRepository.findPartitions("events"));
-
-        partitions.refresh(PartitionConfig.forTable("events")
-                .rangeType(PartitionConfig.RangeType.MONTHLY)
+        partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
+                .rangeType(RangeType.MONTHLY)
                 .retention(2)
                 .buffer(3));
 
-        System.out.println(jdbcPartitionRepository.findPartitions("events"));
+        var result = jdbcPartitionRepository.findPartitions("events");
+
+        assertThat(result).containsExactlyInAnyOrder(
+                Partition.of("events_202402"),
+                Partition.of("events_202403"),
+                Partition.of("events_202404"),
+                Partition.of("events_202401"),
+                Partition.of("events_202312")
+        );
+
+        jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")
+                .param("timestamp", LocalDateTime.of(2024, 2, 8, 12, 12, 12))
+                .update();
+
+        jdbcClient.sql("insert into events(name, created_at) values ('yyy', :timestamp)")
+                .param("timestamp", LocalDateTime.of(2024, 4, 11, 12, 12, 12))
+                .update();
+
+        assertThat(jdbcClient.sql("select count(*) from events")
+                .query(Long.class)
+                .single()).isEqualTo(2);
+
+        assertThat(jdbcClient.sql("select name from events_202402")
+                .query(String.class)
+                .single()).isEqualTo("xxx");
+
+        assertThat(jdbcClient.sql("select name from events_202404")
+                .query(String.class)
+                .single()).isEqualTo("yyy");
+    }
+
+    private static LocalDate pointInTime() {
+        return LocalDate.of(2024, 2, 10);
     }
 
     private void createMonthlyPartition(LocalDate day) {

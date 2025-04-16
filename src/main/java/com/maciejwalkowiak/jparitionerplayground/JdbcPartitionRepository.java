@@ -1,7 +1,10 @@
 package com.maciejwalkowiak.jparitionerplayground;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
+import org.springframework.util.Assert;
 
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -10,6 +13,8 @@ import java.util.stream.Collectors;
 
 @Component
 public class JdbcPartitionRepository implements PartitionRepository {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JdbcPartitionRepository.class);
+
     private final JdbcClient jdbcClient;
 
     public JdbcPartitionRepository(JdbcClient jdbcClient) {
@@ -17,10 +22,12 @@ public class JdbcPartitionRepository implements PartitionRepository {
     }
 
     @Override
-    public List<PartitionName> findPartitions(String tableName) {
+    public List<Partition> findPartitions(String tableName) {
+        Assert.notNull(tableName, "tableName must not be null");
+
         String sql = """
                 SELECT
-                    child.relname AS partition_name
+                    child.relname AS name
                 FROM
                     pg_inherits
                 JOIN
@@ -35,32 +42,54 @@ public class JdbcPartitionRepository implements PartitionRepository {
                     parent.relname = :tableName
                 """;
 
+        LOGGER.debug("Executing SQL: {}", sql);
+
         return jdbcClient.sql(sql)
                 .param("tableName", tableName)
-                .query(PartitionName.class)
+                .query((rs, rowNum) -> Partition.of(rs.getString("name")))
                 .list()
                 .stream()
-                .sorted(Comparator.comparing(PartitionName::value))
+                .sorted(Comparator.comparing(Partition::name))
                 .toList();
     }
 
     @Override
-    public void detachPartitions(String tableName, List<DropPartition> partitions) {
+    public void detachPartitions(List<Partition> partitions) {
+        Assert.notNull(partitions, "partitions must not be null");
+
         String sql = partitions.stream()
-                .map(DropPartition::partitionName)
-                .map(partitionName -> "ALTER TABLE " + tableName + " DETACH PARTITION " + partitionName + ";")
+                .map(partition -> "ALTER TABLE " + partition.parentTableName() + " DETACH PARTITION " + partition.name() + ";")
                 .collect(Collectors.joining("\n"));
-        System.out.println(sql);
+
+        LOGGER.debug("Executing SQL: {}", sql);
+
         jdbcClient.sql(sql).update();
 
     }
 
     @Override
-    public void createPartitions(String tableName, List<AddPartition> partitions) {
+    public void dropPartitions(List<Partition> partitions) {
+        Assert.notNull(partitions, "partitions must not be null");
+
         String sql = partitions.stream()
-                .map(it -> "CREATE TABLE " + tableName + "_" + it.partitionNameSuffix() + " PARTITION OF " + tableName + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "');")
+                .map(partitionName -> "DROP TABLE " + partitionName.name() + ";")
                 .collect(Collectors.joining("\n"));
-        System.out.println(sql);
+
+        LOGGER.debug("Executing SQL: {}", sql);
+
+        jdbcClient.sql(sql).update();
+    }
+
+    @Override
+    public void createPartitions(List<Partition> partitions) {
+        Assert.notNull(partitions, "partitions must not be null");
+
+        String sql = partitions.stream()
+                .map(it -> "CREATE TABLE " + it.name() + " PARTITION OF " + it.parentTableName() + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "');")
+                .collect(Collectors.joining("\n"));
+
+        LOGGER.debug("Executing SQL: {}", sql);
+
         jdbcClient.sql(sql).update();
     }
 }
