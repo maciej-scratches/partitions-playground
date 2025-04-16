@@ -53,7 +53,7 @@ class JparitionerPlaygroundApplicationTests {
         createPartition(pointInTime().minusDays(10));
 
         partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
-                .retention(3)
+                .retention(3, RetentionPolicy.DETACH)
                 .buffer(4));
 
         var result = jdbcPartitionRepository.findPartitions("events");
@@ -97,7 +97,7 @@ class JparitionerPlaygroundApplicationTests {
 
         partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
                 .rangeType(RangeType.MONTHLY)
-                .retention(2)
+                .retention(2, RetentionPolicy.DETACH)
                 .buffer(3));
 
         var result = jdbcPartitionRepository.findPartitions("events");

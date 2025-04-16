@@ -11,6 +11,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * {@link JdbcClient} based implementation of {@link PartitionRepository}.
+ *
+ * @author Maciej Walkowiak
+ */
 @Component
 public class JdbcPartitionRepository implements PartitionRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(JdbcPartitionRepository.class);

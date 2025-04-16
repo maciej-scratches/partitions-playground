@@ -6,6 +6,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.IntStream;
 
+/**
+ * Manages creating and dropping partitions according to {@link PartitionConfig}.
+ *
+ * @author Maciej Walkowiak
+ */
 @Component
 public class Partitions {
     private final PartitionRepository partitionRepository;
@@ -14,10 +19,21 @@ public class Partitions {
         this.partitionRepository = partitionRepository;
     }
 
+    /**
+     * Refreshes partitions in the database according to a config for a current date.
+     *
+     * @param config - partitions config
+     */
     public void refresh(PartitionConfig config) {
         refresh(LocalDate.now(), config);
     }
 
+    /**
+     * Refreshes partitions in the database according to a config for a given date.
+     *
+     * @param date - point in time as a reference to partition config
+     * @param config - partition config
+     */
     public void refresh(LocalDate date, PartitionConfig config) {
         PartitionChangeset changeset = diff(date, config);
         if (config.retentionPolicy() == RetentionPolicy.DETACH) {
@@ -56,5 +72,8 @@ public class Partitions {
             case DAILY -> date.plusDays(i);
             case MONTHLY -> date.plusMonths(i);
         };
+    }
+
+    private record PartitionChangeset(List<Partition> remove, List<Partition> add) {
     }
 }

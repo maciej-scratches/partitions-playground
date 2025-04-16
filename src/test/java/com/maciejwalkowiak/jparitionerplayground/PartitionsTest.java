@@ -59,7 +59,7 @@ class PartitionsTest {
             assertThatThrownBy(() -> partitions.refresh(LocalDate.of(2025, 1, 2), PartitionConfig.forTable("events")
                     .rangeType(RangeType.DAILY)
                     .buffer(3)
-                    .retention(3))).isInstanceOf(IllegalStateException.class);
+                    .retention(3, RetentionPolicy.DETACH))).isInstanceOf(IllegalStateException.class);
         }
     }
 
@@ -73,7 +73,7 @@ class PartitionsTest {
             assertThatThrownBy(() -> partitions.refresh(LocalDate.of(2025, 1, 2), PartitionConfig.forTable("events")
                     .rangeType(RangeType.DAILY)
                     .buffer(3)
-                    .retention(3))).isInstanceOf(IllegalStateException.class);
+                    .retention(3, RetentionPolicy.DETACH))).isInstanceOf(IllegalStateException.class);
         }
 
         @ParameterizedTest
