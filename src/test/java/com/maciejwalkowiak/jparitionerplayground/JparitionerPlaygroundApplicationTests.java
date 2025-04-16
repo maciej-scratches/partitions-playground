@@ -68,7 +68,7 @@ class JparitionerPlaygroundApplicationTests {
         System.out.println(jdbcPartitionRepository.findPartitions("events"));
 
         partitions.refresh(PartitionConfig.forTable("events")
-                        .rangeType(PartitionConfig.RangeType.MONTHLY)
+                .rangeType(PartitionConfig.RangeType.MONTHLY)
                 .retention(2)
                 .buffer(3));
 

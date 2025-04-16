@@ -3,9 +3,9 @@ package com.maciejwalkowiak.jparitionerplayground;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
-public record PartitionRow(String partitionName) {
+public record PartitionName(String value) {
     LocalDate date() {
-        String dateSuffix = partitionName.substring(partitionName.indexOf("_") + 1);
+        String dateSuffix = value.substring(value.indexOf("_") + 1);
         if (dateSuffix.length() == 6) {
             dateSuffix += "01";
         }

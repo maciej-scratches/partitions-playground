@@ -51,9 +51,9 @@ public class PartitionConfig {
         return tableName;
     }
 
-    List<PartitionInfo> expectedPartitionDates(LocalDate date) {
+    List<Partitions.PartitionInfo> expectedPartitionDates(LocalDate date) {
         return IntStream.range(-retention, buffer)
-                .mapToObj(i -> new PartitionInfo(partitionName(date, i), partitionDate(date, i), rangeStart(date, i), rangeEnd(date, i)))
+                .mapToObj(i -> new Partitions.PartitionInfo(partitionName(date, i), partitionDate(date, i), rangeStart(date, i), rangeEnd(date, i)))
                 .toList();
     }
 
@@ -79,10 +79,9 @@ public class PartitionConfig {
     }
 
     private String partitionName(LocalDate date, int i) {
-        LocalDate now = LocalDate.now();
         return switch (this.rangeType) {
-            case DAILY -> now.plusDays(i).format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-            case MONTHLY -> now.plusMonths(i).format(DateTimeFormatter.ofPattern("yyyyMM"));
+            case DAILY -> date.plusDays(i).format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+            case MONTHLY -> date.plusMonths(i).format(DateTimeFormatter.ofPattern("yyyyMM"));
         };
     }
 }

@@ -3,7 +3,6 @@ package com.maciejwalkowiak.jparitionerplayground;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
@@ -18,7 +17,7 @@ public class JdbcPartitionRepository implements PartitionRepository {
     }
 
     @Override
-    public List<PartitionRow> findPartitions(String tableName) {
+    public List<PartitionName> findPartitions(String tableName) {
         String sql = """
                 SELECT
                     child.relname AS partition_name
@@ -38,17 +37,17 @@ public class JdbcPartitionRepository implements PartitionRepository {
 
         return jdbcClient.sql(sql)
                 .param("tableName", tableName)
-                .query(PartitionRow.class)
+                .query(PartitionName.class)
                 .list()
                 .stream()
-                .sorted(Comparator.comparing(PartitionRow::partitionName))
+                .sorted(Comparator.comparing(PartitionName::value))
                 .toList();
     }
 
     @Override
-    public void detachPartitions(String tableName, List<PartitionRow> partitions) {
+    public void detachPartitions(String tableName, List<DropPartition> partitions) {
         String sql = partitions.stream()
-                .map(PartitionRow::partitionName)
+                .map(DropPartition::partitionName)
                 .map(partitionName -> "ALTER TABLE " + tableName + " DETACH PARTITION " + partitionName + ";")
                 .collect(Collectors.joining("\n"));
         System.out.println(sql);
@@ -57,9 +56,9 @@ public class JdbcPartitionRepository implements PartitionRepository {
     }
 
     @Override
-    public void createPartitions(String tableName, List<PartitionInfo> partitions) {
+    public void createPartitions(String tableName, List<AddPartition> partitions) {
         String sql = partitions.stream()
-                .map(it -> "CREATE TABLE " + tableName + "_" + it.partitionName() + " PARTITION OF " + tableName + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "');")
+                .map(it -> "CREATE TABLE " + tableName + "_" + it.partitionNameSuffix() + " PARTITION OF " + tableName + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "');")
                 .collect(Collectors.joining("\n"));
         System.out.println(sql);
         jdbcClient.sql(sql).update();
