@@ -92,8 +92,8 @@ public record Partition(String name, RangeType rangeType) {
      */
     public LocalDateTime end() {
         return switch (this.rangeType) {
-            case DAILY -> LocalDate.parse(this.suffix(), FORMATTER).atStartOfDay().plusDays(1).minusSeconds(1);
-            case MONTHLY -> LocalDate.parse(this.suffix() + "01", FORMATTER).atStartOfDay().plusMonths(1).minusSeconds(1);
+            case DAILY -> LocalDate.parse(this.suffix(), FORMATTER).atStartOfDay().plusDays(1);
+            case MONTHLY -> LocalDate.parse(this.suffix() + "01", FORMATTER).atStartOfDay().plusMonths(1);
         };
     }
 
