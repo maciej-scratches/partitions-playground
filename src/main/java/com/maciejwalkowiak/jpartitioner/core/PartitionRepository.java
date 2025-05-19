@@ -17,14 +17,14 @@ public interface PartitionRepository {
     List<Partition> findPartitions(String tableName);
 
     /**
-     * Detaches partitions from the parent table.
+     * Detaches concurrently partitions from the parent table.
      *
      * @param partitions - list of partitions to detach
      */
     void detachPartitions(List<Partition> partitions);
 
     /**
-     * Detaches and drops permanently partitions.
+     * Detaches concurrently and drops already detached partitions permanently from the database.
      *
      * @param partitions - list of partitions to drop
      */
