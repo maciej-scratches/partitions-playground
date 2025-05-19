@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jparitionerplayground;
+package com.maciejwalkowiak.jpartitioner;
 
 /**
  * Defines what to do with partitions older than configured retention.

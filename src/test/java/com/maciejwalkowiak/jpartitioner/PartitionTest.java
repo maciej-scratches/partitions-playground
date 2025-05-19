@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jparitionerplayground;
+package com.maciejwalkowiak.jpartitioner;
 
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;

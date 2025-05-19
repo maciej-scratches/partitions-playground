@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jparitionerplayground;
+package com.maciejwalkowiak.jpartitioner;
 
 /**
  * Defines if partitions should be created per day or per month.

@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jparitionerplayground;
+package com.maciejwalkowiak.jpartitioner;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

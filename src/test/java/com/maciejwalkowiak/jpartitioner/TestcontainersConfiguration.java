@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jparitionerplayground;
+package com.maciejwalkowiak.jpartitioner;
 
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
