@@ -63,7 +63,7 @@ public class JdbcPartitionRepository implements PartitionRepository {
         Assert.notNull(partitions, "partitions must not be null");
 
         partitions.stream()
-                .map(partition -> "ALTER TABLE " + partition.parentTableName() + " DETACH PARTITION " + partition.name() + " CONCURRENTLY;")
+                .map(partition -> "ALTER TABLE " + partition.parentTableName() + " DETACH PARTITION " + partition.name() + " CONCURRENTLY")
                 .forEach(this::executeWithAutoCommitEnabled);
     }
 
@@ -79,7 +79,7 @@ public class JdbcPartitionRepository implements PartitionRepository {
                 .map(Partition::parentTableName)
                 .distinct()
                 .flatMap(this::findDetachedPartitionNames)
-                .map(partitionName -> "DROP TABLE " + partitionName + ";")
+                .map(partitionName -> "DROP TABLE " + partitionName)
                 .forEach(this::executeWithAutoCommitEnabled);
     }
 
@@ -88,7 +88,7 @@ public class JdbcPartitionRepository implements PartitionRepository {
         Assert.notNull(partitions, "partitions must not be null");
 
         partitions.stream()
-                .map(it -> "CREATE TABLE " + it.name() + " PARTITION OF " + it.parentTableName() + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "');")
+                .map(it -> "CREATE TABLE " + it.name() + " PARTITION OF " + it.parentTableName() + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "')")
                 .forEach(this::executeWithAutoCommitEnabled);
     }
 
