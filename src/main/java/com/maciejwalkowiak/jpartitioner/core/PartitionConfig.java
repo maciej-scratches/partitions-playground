@@ -1,5 +1,7 @@
 package com.maciejwalkowiak.jpartitioner.core;
 
+import org.springframework.util.Assert;
+
 /**
  * Partitions configuration to be used on {@link Partitions#refresh(PartitionConfig)}.
  *
