@@ -1,6 +1,5 @@
 package com.maciejwalkowiak.jparitionerplayground;
 
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,6 +7,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
+@Transactional(propagation = Propagation.NEVER)
 class JparitionerPlaygroundApplicationTests {
 
     @Autowired
@@ -26,31 +29,31 @@ class JparitionerPlaygroundApplicationTests {
     private JdbcPartitionRepository jdbcPartitionRepository;
     @Autowired
     private Partitions partitions;
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @BeforeEach
     void setUp() {
-        String sql = """
-                CREATE TABLE events (
+        executeSql("""
+                CREATE TABLE IF NOT EXISTS events (
                     id SERIAL,
                     name TEXT NOT NULL,
                     created_at TIMESTAMP NOT NULL,
                     primary key (id, created_at)
                 ) PARTITION BY RANGE (created_at);
-                """;
-
-        jdbcClient.sql(sql).update();
+                """);
     }
 
     @AfterEach
     void tearDown() {
-        jdbcClient.sql("drop table events cascade").update();
+        executeSql("drop table events cascade");
     }
 
     @Test
     void daily() {
-        createPartition(pointInTime());
-        createPartition(pointInTime().minusDays(1));
-        createPartition(pointInTime().minusDays(10));
+        createDailyPartition(pointInTime());
+        createDailyPartition(pointInTime().minusDays(1));
+        createDailyPartition(pointInTime().minusDays(10));
 
         partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
                 .retention(3, RetentionPolicy.DETACH)
@@ -68,13 +71,15 @@ class JparitionerPlaygroundApplicationTests {
                 Partition.of("events_20240207")
         );
 
-        jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")
-                .param("timestamp", LocalDateTime.of(2024, 2, 8, 12, 12, 12))
-                .update();
+        transactionTemplate.executeWithoutResult(status -> {
+            jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")
+                    .param("timestamp", LocalDateTime.of(2024, 2, 8, 12, 12, 12))
+                    .update();
 
-        jdbcClient.sql("insert into events(name, created_at) values ('yyy', :timestamp)")
-                .param("timestamp", LocalDateTime.of(2024, 2, 11, 12, 12, 12))
-                .update();
+            jdbcClient.sql("insert into events(name, created_at) values ('yyy', :timestamp)")
+                    .param("timestamp", LocalDateTime.of(2024, 2, 11, 12, 12, 12))
+                    .update();
+        });
 
         assertThat(jdbcClient.sql("select count(*) from events")
                 .query(Long.class)
@@ -110,13 +115,15 @@ class JparitionerPlaygroundApplicationTests {
                 Partition.of("events_202312")
         );
 
-        jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")
-                .param("timestamp", LocalDateTime.of(2024, 2, 8, 12, 12, 12))
-                .update();
+        transactionTemplate.executeWithoutResult(status -> {
+            jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")
+                    .param("timestamp", LocalDateTime.of(2024, 2, 8, 12, 12, 12))
+                    .update();
 
-        jdbcClient.sql("insert into events(name, created_at) values ('yyy', :timestamp)")
-                .param("timestamp", LocalDateTime.of(2024, 4, 11, 12, 12, 12))
-                .update();
+            jdbcClient.sql("insert into events(name, created_at) values ('yyy', :timestamp)")
+                    .param("timestamp", LocalDateTime.of(2024, 4, 11, 12, 12, 12))
+                    .update();
+        });
 
         assertThat(jdbcClient.sql("select count(*) from events")
                 .query(Long.class)
@@ -137,13 +144,17 @@ class JparitionerPlaygroundApplicationTests {
 
     private void createMonthlyPartition(LocalDate day) {
         LocalDateTime start = day.withDayOfMonth(1).atStartOfDay();
-        jdbcClient.sql("CREATE TABLE IF NOT EXISTS events_%s PARTITION OF events FOR VALUES FROM ('%s') TO ('%s')".formatted(day.format(DateTimeFormatter.ofPattern("yyyyMM")), start.format(DateTimeFormatter.ISO_DATE_TIME), start.plusMonths(1).minusSeconds(1).format(DateTimeFormatter.ISO_DATE_TIME))).update();
+
+        executeSql("CREATE TABLE IF NOT EXISTS events_%s PARTITION OF events FOR VALUES FROM ('%s') TO ('%s')".formatted(day.format(DateTimeFormatter.ofPattern("yyyyMM")), start.format(DateTimeFormatter.ISO_DATE_TIME), start.plusMonths(1).minusSeconds(1).format(DateTimeFormatter.ISO_DATE_TIME)));
     }
 
-    private void createPartition(LocalDate day) {
-        jdbcClient.sql("CREATE TABLE IF NOT EXISTS events_%s PARTITION OF events FOR VALUES FROM ('%s') TO ('%s')".formatted(day.format(DateTimeFormatter.ofPattern("yyyyMMdd")), day.atStartOfDay().format(DateTimeFormatter.ISO_DATE_TIME), day.atStartOfDay().plusDays(1).minusSeconds(1).format(DateTimeFormatter.ISO_DATE_TIME))).update();
+    private void createDailyPartition(LocalDate day) {
+        executeSql("CREATE TABLE IF NOT EXISTS events_%s PARTITION OF events FOR VALUES FROM ('%s') TO ('%s')".formatted(day.format(DateTimeFormatter.ofPattern("yyyyMMdd")), day.atStartOfDay().format(DateTimeFormatter.ISO_DATE_TIME), day.atStartOfDay().plusDays(1).minusSeconds(1).format(DateTimeFormatter.ISO_DATE_TIME)));
     }
 
+    private void executeSql(String sql) {
+        transactionTemplate.executeWithoutResult(status -> {
+            jdbcClient.sql(sql).update();
+        });
+    }
 }
-
-//

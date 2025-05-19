@@ -27,7 +27,7 @@ class PartitionTest {
         void resolvesRange() {
             var add = Partition.of("events_20240105");
             assertThat(add.start()).isEqualTo(LocalDateTime.of(2024, 1, 5, 0, 0, 0));
-            assertThat(add.end()).isEqualTo(LocalDateTime.of(2024, 1, 5, 23, 59, 59));
+            assertThat(add.end()).isEqualTo(LocalDateTime.of(2024, 1, 6, 0, 0, 0));
         }
 
         @Test
@@ -63,7 +63,7 @@ class PartitionTest {
         void resolvesRange() {
             var add = Partition.of("events_202401");
             assertThat(add.start()).isEqualTo(LocalDateTime.of(2024, 1, 1, 0, 0, 0));
-            assertThat(add.end()).isEqualTo(LocalDateTime.of(2024, 1, 31, 23, 59, 59));
+            assertThat(add.end()).isEqualTo(LocalDateTime.of(2024, 2, 1, 0, 0, 0));
         }
 
         @Test
