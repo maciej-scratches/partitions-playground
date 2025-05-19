@@ -2,7 +2,8 @@ package com.maciejwalkowiak.jparitionerplayground;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
@@ -14,8 +15,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -46,17 +49,20 @@ class JparitionerPlaygroundApplicationTests {
 
     @AfterEach
     void tearDown() {
-        executeSql("drop table events cascade");
+        executeSql("drop schema public cascade");
+        executeSql("create schema public");
     }
 
-    @Test
-    void daily() {
+    @ParameterizedTest
+    @EnumSource(RetentionPolicy.class)
+    void detachesOrDeletesDailyPartitions(RetentionPolicy retentionPolicy) {
         createDailyPartition(pointInTime());
         createDailyPartition(pointInTime().minusDays(1));
         createDailyPartition(pointInTime().minusDays(10));
+        createDailyPartition(pointInTime().minusDays(11));
 
         partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
-                .retention(3, RetentionPolicy.DETACH)
+                .retention(3, retentionPolicy)
                 .buffer(4));
 
         var result = jdbcPartitionRepository.findPartitions("events");
@@ -70,6 +76,77 @@ class JparitionerPlaygroundApplicationTests {
                 Partition.of("events_20240208"),
                 Partition.of("events_20240207")
         );
+
+        if (retentionPolicy == RetentionPolicy.DETACH) {
+            assertThat(findTableByName("events_20240131")).isPresent();
+            assertThat(findTableByName("events_20240130")).isPresent();
+        } else if (retentionPolicy == RetentionPolicy.DROP) {
+            assertThat(findTableByName("events_20240131")).isNotPresent();
+            assertThat(findTableByName("events_20240130")).isNotPresent();
+        } else {
+            fail("Unexpected retention policy: " + retentionPolicy);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(RetentionPolicy.class)
+    void detachesOrDeletesMonthlyPartitions(RetentionPolicy retentionPolicy) {
+        createMonthlyPartition(pointInTime());
+        createMonthlyPartition(pointInTime().minusMonths(1));
+        createMonthlyPartition(pointInTime().minusMonths(9));
+        createMonthlyPartition(pointInTime().minusMonths(10));
+
+        assertThat(jdbcPartitionRepository.findPartitions("events")).containsExactlyInAnyOrder(
+                Partition.of("events_202304"),
+                Partition.of("events_202305"),
+                Partition.of("events_202401"),
+                Partition.of("events_202402")
+        );
+
+        partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
+                .rangeType(RangeType.MONTHLY)
+                .retention(2, retentionPolicy)
+                .buffer(3));
+
+        var result = jdbcPartitionRepository.findPartitions("events");
+
+        assertThat(result).containsExactlyInAnyOrder(
+                Partition.of("events_202402"),
+                Partition.of("events_202403"),
+                Partition.of("events_202404"),
+                Partition.of("events_202401"),
+                Partition.of("events_202312")
+        );
+
+        if (retentionPolicy == RetentionPolicy.DETACH) {
+            assertThat(findTableByName("events_202304")).isPresent();
+            assertThat(findTableByName("events_202305")).isPresent();
+        } else if (retentionPolicy == RetentionPolicy.DROP) {
+            assertThat(findTableByName("events_202304")).isNotPresent();
+            assertThat(findTableByName("events_202305")).isNotPresent();
+        } else {
+            fail("Unexpected retention policy: " + retentionPolicy);
+        }
+    }
+
+    private Optional<String> findTableByName(String tableName) {
+        return jdbcClient.sql("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename = :tableName")
+                .param("tableName", tableName)
+                .query(String.class)
+                .optional();
+    }
+
+    @ParameterizedTest
+    @EnumSource(RetentionPolicy.class)
+    void insertsRowsToDailyPartitions(RetentionPolicy retentionPolicy) {
+        createDailyPartition(pointInTime());
+        createDailyPartition(pointInTime().minusDays(1));
+        createDailyPartition(pointInTime().minusDays(10));
+        createDailyPartition(pointInTime().minusDays(11));
+
+        partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
+                .retention(3, retentionPolicy)
+                .buffer(4));
 
         transactionTemplate.executeWithoutResult(status -> {
             jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")
@@ -94,26 +171,18 @@ class JparitionerPlaygroundApplicationTests {
                 .single()).isEqualTo("yyy");
     }
 
-    @Test
-    void monthly() {
+    @ParameterizedTest
+    @EnumSource(RetentionPolicy.class)
+    void insertsRowsToMonthlyPartitions(RetentionPolicy retentionPolicy) {
         createMonthlyPartition(pointInTime());
         createMonthlyPartition(pointInTime().minusMonths(1));
+        createMonthlyPartition(pointInTime().minusMonths(9));
         createMonthlyPartition(pointInTime().minusMonths(10));
 
         partitions.refresh(pointInTime(), PartitionConfig.forTable("events")
                 .rangeType(RangeType.MONTHLY)
-                .retention(2, RetentionPolicy.DETACH)
+                .retention(2, retentionPolicy)
                 .buffer(3));
-
-        var result = jdbcPartitionRepository.findPartitions("events");
-
-        assertThat(result).containsExactlyInAnyOrder(
-                Partition.of("events_202402"),
-                Partition.of("events_202403"),
-                Partition.of("events_202404"),
-                Partition.of("events_202401"),
-                Partition.of("events_202312")
-        );
 
         transactionTemplate.executeWithoutResult(status -> {
             jdbcClient.sql("insert into events(name, created_at) values ('xxx', :timestamp)")

@@ -12,7 +12,7 @@ import java.sql.Statement;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * {@link JdbcTemplate} based implementation of {@link PartitionRepository}.
@@ -62,43 +62,39 @@ public class JdbcPartitionRepository implements PartitionRepository {
     public void detachPartitions(List<Partition> partitions) {
         Assert.notNull(partitions, "partitions must not be null");
 
-        String sql = partitions.stream()
+        partitions.stream()
                 .map(partition -> "ALTER TABLE " + partition.parentTableName() + " DETACH PARTITION " + partition.name() + " CONCURRENTLY;")
-                .collect(Collectors.joining("\n"));
-
-        LOGGER.info("Executing SQL: {}", sql);
-
-        executeWithAutoCommitEnabled(sql);
-
+                .forEach(this::executeWithAutoCommitEnabled);
     }
 
     @Override
     public void dropPartitions(List<Partition> partitions) {
         Assert.notNull(partitions, "partitions must not be null");
 
-        String sql = partitions.stream()
-                .map(partitionName -> "DROP TABLE " + partitionName.name() + ";")
-                .collect(Collectors.joining("\n"));
+        // first detach partitions concurrently
+        detachPartitions(partitions);
 
-        LOGGER.info("Executing SQL: {}", sql);
-
-        executeWithAutoCommitEnabled(sql);
+        // delete only partitions that are already detached
+        partitions.stream()
+                .map(Partition::parentTableName)
+                .distinct()
+                .flatMap(this::findDetachedPartitionNames)
+                .map(partitionName -> "DROP TABLE " + partitionName + ";")
+                .forEach(this::executeWithAutoCommitEnabled);
     }
 
     @Override
     public void createPartitions(List<Partition> partitions) {
         Assert.notNull(partitions, "partitions must not be null");
 
-        String sql = partitions.stream()
+        partitions.stream()
                 .map(it -> "CREATE TABLE " + it.name() + " PARTITION OF " + it.parentTableName() + " FOR VALUES FROM ('" + it.start().format(DateTimeFormatter.ISO_DATE_TIME) + "') TO ('" + it.end().format(DateTimeFormatter.ISO_DATE_TIME) + "');")
-                .collect(Collectors.joining("\n"));
-
-        LOGGER.debug("Executing SQL: {}", sql);
-
-        executeWithAutoCommitEnabled(sql);
+                .forEach(this::executeWithAutoCommitEnabled);
     }
 
     private void executeWithAutoCommitEnabled(String sql) {
+        LOGGER.info("Executing SQL: {}", sql);
+
         jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
             boolean originalAutoCommit = connection.getAutoCommit();
 
@@ -114,5 +110,20 @@ public class JdbcPartitionRepository implements PartitionRepository {
             }
             return null;
         });
+    }
+
+    private Stream<String> findDetachedPartitionNames(String parentTableName) {
+        return jdbcTemplate.queryForList("""
+                        SELECT
+                            c.relname AS name
+                        FROM
+                            pg_class c
+                        JOIN
+                            pg_namespace ns ON c.relnamespace = ns.oid
+                        WHERE
+                            c.relkind = 'r'
+                          AND c.relispartition IS false 
+                          AND c.relname LIKE ? || '%'""", String.class, parentTableName)
+                .stream();
     }
 }
