@@ -1,11 +1,9 @@
-package com.maciejwalkowiak.jpartitioner;
+package com.maciejwalkowiak.jpartitioner.core;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
-import org.springframework.util.Assert;
 
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -19,7 +17,6 @@ import java.util.stream.Stream;
  *
  * @author Maciej Walkowiak
  */
-@Component
 public class JdbcPartitionRepository implements PartitionRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(JdbcPartitionRepository.class);
 

@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jpartitioner;
+package com.maciejwalkowiak.jpartitioner.core;
 
 import java.util.List;
 

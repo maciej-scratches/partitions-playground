@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jpartitioner;
+package com.maciejwalkowiak.jpartitioner.core;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

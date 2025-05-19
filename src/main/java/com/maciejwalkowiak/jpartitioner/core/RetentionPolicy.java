@@ -1,4 +1,4 @@
-package com.maciejwalkowiak.jpartitioner;
+package com.maciejwalkowiak.jpartitioner.core;
 
 /**
  * Defines what to do with partitions older than configured retention.

@@ -1,6 +1,4 @@
-package com.maciejwalkowiak.jpartitioner;
-
-import org.springframework.stereotype.Component;
+package com.maciejwalkowiak.jpartitioner.core;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -11,7 +9,6 @@ import java.util.stream.IntStream;
  *
  * @author Maciej Walkowiak
  */
-@Component
 public class Partitions {
     private final PartitionRepository partitionRepository;
 
