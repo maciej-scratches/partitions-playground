@@ -1,5 +1,7 @@
 package com.maciejwalkowiak.jpartitioner.core;
 
+import org.springframework.util.Assert;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -25,6 +27,10 @@ public record Partition(String name, RangeType rangeType) {
      * @return a new partition
      */
     public static Partition of(String parentTableName, RangeType rangeType, LocalDate date) {
+        Assert.notNull(parentTableName, "parentTableName must not be null");
+        Assert.notNull(rangeType, "rangeType must not be null");
+        Assert.notNull(date, "date must not be null");
+
         String suffix = switch (rangeType) {
             case DAILY -> date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
             case MONTHLY -> date.format(DateTimeFormatter.ofPattern("yyyyMM"));
@@ -40,6 +46,8 @@ public record Partition(String name, RangeType rangeType) {
      * @return a new partition
      */
     public static Partition of(String name) {
+        Assert.notNull(name, "name must not be null");
+
         if (!name.contains(SEPARATOR)) {
             throw new IllegalStateException("Partition name: " + name + " does not contain separator: " + SEPARATOR);
         }

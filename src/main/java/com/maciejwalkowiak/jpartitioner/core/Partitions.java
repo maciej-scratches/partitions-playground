@@ -1,5 +1,7 @@
 package com.maciejwalkowiak.jpartitioner.core;
 
+import org.springframework.util.Assert;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -13,6 +15,7 @@ public class Partitions {
     private final PartitionRepository partitionRepository;
 
     public Partitions(PartitionRepository partitionRepository) {
+        Assert.notNull(partitionRepository, "partitionRepository must not be null");
         this.partitionRepository = partitionRepository;
     }
 
@@ -32,6 +35,9 @@ public class Partitions {
      * @param config - partition config
      */
     public void refresh(LocalDate date, PartitionConfig config) {
+        Assert.notNull(date, "date must not be null");
+        Assert.notNull(config, "config must not be null");
+
         PartitionChangeset changeset = diff(date, config);
         if (config.retentionPolicy() == RetentionPolicy.DETACH) {
             partitionRepository.detachPartitions(changeset.remove());

@@ -24,6 +24,7 @@ public class JdbcPartitionRepository implements PartitionRepository {
     private final JdbcTemplate jdbcTemplate;
 
     public JdbcPartitionRepository(JdbcTemplate jdbcTemplate) {
+        Assert.notNull(jdbcTemplate, "jdbcTemplate must not be null");
         this.jdbcTemplate = jdbcTemplate;
     }
 
